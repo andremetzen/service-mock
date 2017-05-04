@@ -7,6 +7,16 @@ const crypto = require('crypto');
 let id = Math.random().toString(36).substr(2, 9);
 let serviceName = process.env.SERVICE_NAME;
 let isHealth = true;
+let highload = false;
+let heavyWork = function() {
+	for( let i = 0; i < 100000; i++ ) {
+		const hash = crypto.createHash( 'sha256' );
+		hash.update( Math.random().toString( 36 ) );
+		hash.digest( 'hex' );
+	}
+	if(highload)
+		setTimeout(heavyWork, 1);
+};
 
 app.get('/', function (req, res) {
 	res.json({
@@ -17,43 +27,76 @@ app.get('/', function (req, res) {
 });
 
 app.get('/fail', function (req, res) {
-	res.status(500).json({status: "I'm a failure"});
+	res.status(500).json({
+		pid: id,
+		serviceName: serviceName,
+		status: "I'm a failure"
+	});
 });
 
 app.get('/success', function (req, res) {
-	res.status(200).json({status: "I'm a success"});
+	res.status(200).json({
+		pid: id,
+		serviceName: serviceName,
+		status: "I'm a success"
+	});
 });
 
 app.get('/health', function (req, res) {
-	res.status(isHealth ? 200 : 500).json({status: "I'm "+(isHealth ? "" : "not ")+"healthy"});
+	res.status(isHealth ? 200 : 500).json({
+		pid: id,
+		serviceName: serviceName,
+		status: "I'm "+(isHealth ? "" : "not ")+"healthy"
+	});
 });
 
 app.get('/health/disable', function (req, res) {
 	isHealth = false;
-	res.json({status: "Service is now unhealthy"});
+	res.json({
+		pid: id,
+		serviceName: serviceName,
+		status: "Service is now unhealthy"
+	});
 });
 
 app.get('/health/enable', function (req, res) {
 	isHealth = true;
-	res.json({status: "Service is now healthy"});
+	res.json({
+		pid: id,
+		serviceName: serviceName,
+		status: "Service is now healthy"
+	});
 });
 
 app.get('/health/timeout/:seconds', function (req, res) {
 	isHealth = false;
 	setTimeout(function(){ isHealth = true; }, 1000*req.param('seconds'));
-	res.json({status: "Service is now unhealthy", timeout: req.param('seconds')});
+	res.json({
+		pid: id,
+		serviceName: serviceName,
+		status: "Service is now unhealthy",
+		timeout: req.param('seconds')
+	});
 });
 
 app.get('/highload/:seconds', function (req, res) {
-	let interval = setInterval(function(){
-		for(let i = 0; i<100000; i++) {
-			const hash = crypto.createHash( 'sha256' );
-			hash.update( Math.random().toString( 36 ) );
-			hash.digest( 'hex' );
-		}
-	}, 0);
-	setTimeout(function(){ clearInterval(interval);  }, 1000*req.param('seconds'));
-	res.json({status: "Service is set to use all CPU available", timeout: req.param('seconds')});
+
+	if(!highload) {
+		console.log( 'Starting highload at ' + serviceName + ' with ID: ' + id );
+		highload = true;
+		process.nextTick(heavyWork);
+		setTimeout( function() {
+			highload = false;
+			console.log( 'Ending highload at ' + serviceName + ' with ID: ' + id );
+		}, 1000 * req.param( 'seconds' ) );
+	}
+
+	res.json({
+		pid: id,
+		serviceName: serviceName,
+		status: "Service is set to use all CPU available",
+		timeout: req.param('seconds')
+	});
 });
 
 app.get('/request/*', function (req, res) {
@@ -82,15 +125,25 @@ app.get('/request/*', function (req, res) {
 	});
 
 	client.on('error', (e) => {
-		console.log(`problem with request: ${e.message}`);
-		res.status(500).json({status: e.message, endpoint: endpoint});
+		console.log(`Problem with request: ${e.message}`);
+		res.status(500).json({
+			pid: id,
+			serviceName: serviceName,
+			status: e.message,
+			endpoint: endpoint
+		});
 	});
 
 	client.end();
 });
 
 app.get('/exit', function (req, res) {
-	res.json({status: "Ending process"});
+	console.log('Exiting '+serviceName+' with ID: '+id);
+	res.json({
+		pid: id,
+		serviceName: serviceName,
+		status: "Ending process"
+	});
 	process.exit();
 });
 
